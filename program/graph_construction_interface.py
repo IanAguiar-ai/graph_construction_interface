@@ -27,9 +27,10 @@ class Mouse:
         self.max_alpha:int = 255
         self.radius:int = 7
         self.effect_press:float = 1
+        self.alpha_zoom:int = 0
 
     def animation(self) -> None:
-        global TEXTRENDER
+        global TEXTRENDER, ZOOM
 
         x_temp, y_temp = pygame.mouse.get_pos()
         self.x, self.y = exp_mean(self.x, x_temp, alpha = 0.5), exp_mean(self.y, y_temp, alpha = 0.5)
@@ -46,12 +47,22 @@ class Mouse:
                 self.color:list[float] = [exp_mean(c, self.color_left[i], alpha = 0.08) for i, c in enumerate(self.color)]
                 self.side:int = 1
 
-            if event.button == 3:
+            elif event.button == 3:
                 #print(f"Mouse Press: {pygame.mouse.get_pos()} (right)")
                 self.press:bool = True
                 self.effect_press:float = exp_mean(self.effect_press, 10, alpha = 0.08)
                 self.color:list[float] = [exp_mean(c, self.color_right[i], alpha = 0.08) for i, c in enumerate(self.color)]
                 self.side:int = 3
+
+            elif event.button == 2:
+                ZOOM = max(0.25, min(4, ZOOM*0.98))
+                print(f"Scroll up! {ZOOM:0.04f}")
+                self.alpha_zoom:float = 255
+
+            elif event.button == 5:
+                ZOOM = max(0.25, min(4, ZOOM*1.02))
+                print(f"Scroll up! {ZOOM:0.04f}")
+                self.alpha_zoom:float = 255
 
         else:
             if self.press & (self.side == 1):
@@ -64,6 +75,15 @@ class Mouse:
                self.press:bool = False
                print(f"Mouse Click: {pygame.mouse.get_pos()} (right)")
 
+
+        if self.alpha_zoom > 0:
+            self.alpha_zoom -= 3
+            pygame.draw.line(MOUSESURF, (200, 210, 200, self.alpha_zoom),
+                            (self.x+29, self.y-20), (self.x+29, self.y+20), 2)
+            pygame.draw.circle(MOUSESURF, (255, 255, 255, self.alpha_zoom),
+                               (self.x+30, self.y+ZOOM*10 - 20), 6, 6)
+
+
         text_surface = TEXTRENDER.render(f"Mode: {self.mode if self.mode != None else '~'}", True, (255, 255, 255))
         rect_text = text_surface.get_rect()
         SCREEN.blit(text_surface, rect_text)
@@ -74,27 +94,47 @@ class Mouse:
             if event.key == pygame.K_ESCAPE:
                 print("Press (esc)!")
                 self.mode = None
-
+            elif event.key == pygame.K_h:
+                print("Press (h)!")
+                self.mode = "(H)elp"
+            elif event.key == pygame.K_i:
+                print("Press (i)!")
+                self.mode = "(I)nfo"
             elif event.key == pygame.K_n:
                 print("Press (n)!")
                 self.mode = "(N)ode"
-
             elif event.key == pygame.K_c:
                 print("Press (c)!")
                 self.mode = "(C)onnection"
+            elif event.key == pygame.K_b:
+                print("Press (b)!")
+                self.mode = "(B)oth connection"
 
             else:
                 self.mode = None
 
+
+    def logic(self) -> None:
+        global NODES, MAXSCREENX, MAXSCREENY, GRIDSURF, SCREENX, SCREENY, ZOOM
+
+        if (self.mode == "(N)ode") & (self.click == True) & (self.side == 1):
+            x_temp, y_temp = pygame.mouse.get_pos()
+            NODES.create_node((x_temp*ZOOM + SCREENX, y_temp*ZOOM + SCREENY))
+
+        elif self.mode == "(I)nfo":
+            self.alpha_zoom:int = 255
+
+
 class Grid:
     def animation(self) -> None:
-        global MAXSCREENX, MAXSCREENY, GRIDSURF, SCREENX, SCREENY
+        global MAXSCREENX, MAXSCREENY, GRIDSURF, SCREENX, SCREENY, ZOOM
 
-        for line_x in range(0, MAXSCREENX+101, 100):
-            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (line_x-SCREENX%100, 0), (line_x-SCREENX%100, MAXSCREENY), 3)
+        diff:int = round(100*1/ZOOM)
+        for line_x in range(0, MAXSCREENX+diff+1, diff):
+            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (line_x-SCREENX%diff, 0), (line_x-SCREENX%diff, MAXSCREENY), 3)
 
-        for line_y in range(0, MAXSCREENY+101, 100):
-            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (0, line_y-SCREENY%100), (MAXSCREENX, line_y-SCREENY%100), 3)
+        for line_y in range(0, MAXSCREENY+diff+1, diff):
+            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (0, line_y-SCREENY%diff), (MAXSCREENX, line_y-SCREENY%diff), 3)
 
         x, y = pygame.mouse.get_pos()
         n:float = 0.05
@@ -112,13 +152,23 @@ class Grid:
 class Nodes:
     def __init__(self) -> None:
         self.pos:list[int, int] = []
+        self.colors:list[int, int, int] = []
         self.ids:list[int] = []
         self.names:list[str] = []
         self.conections:list[str] = []
 
     def animation(self) -> None:
-        for pos in self.pos:
-            pygame.draw.circle(NODESURF, (*[round(c) for c in self.color], self.alpha), (self.x, self.y), self.radius, round(self.effect_press))
+        global SCREENX, SCREENY, ZOOM
+
+        for i, pos in enumerate(self.pos):
+            pygame.draw.circle(NODESURF, (*self.colors[i], 255),
+                                          [pos[0]*1/ZOOM - SCREENX, pos[1]*1/ZOOM - SCREENY], round(20*1/ZOOM), round(3*1/ZOOM))
+
+    def create_node(self, pos:list[int, int]) -> None:
+        self.pos.append(pos)
+        self.colors.append([255, 255, 255])
+        self.ids.append("".join([chr(int(random.uniform(65, 127))) for i in range(15)]))
+        print(self.pos, self.ids)
 
 class Log:
     """
@@ -148,12 +198,14 @@ def exp_mean(pos_past, pos_now, alpha = 0.2) -> float:
 # Global definitions
 MAXSCREENX:int = 1350
 MAXSCREENY:int = 900
+ZOOM:float = 1
 SCREENX:int = 0
 SCREENY:int = 0
 FPS:int = 30
 MOUSE:Mouse = Mouse()
 LOG:Log = Log()
 GRID:Grid = Grid()
+NODES:Nodes = Nodes()
 
 # Colors
 COLORBOTTON = (45, 50, 50)
@@ -177,6 +229,8 @@ while running:
 
         MOUSE.find_event(event)
 
+    MOUSE.logic()
+
     # Clean screen
     MOUSESURF.fill((0, 0, 0, 0))
     GRIDSURF.fill((0, 0, 0, 0))
@@ -187,6 +241,7 @@ while running:
 
     # Logic
     MOUSE.animation()
+    NODES.animation()
     GRID.animation()
 
     SCREEN.blit(NODESURF, (0, 0))
