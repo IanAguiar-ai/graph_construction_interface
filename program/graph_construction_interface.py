@@ -54,15 +54,17 @@ class Mouse:
                 self.color:list[float] = [exp_mean(c, self.color_right[i], alpha = 0.08) for i, c in enumerate(self.color)]
                 self.side:int = 3
 
-            elif event.button == 2:
-                ZOOM = max(0.25, min(4, ZOOM*0.98))
+        elif event.type == pygame.MOUSEWHEEL:
+            if event.y > 0:
+                ZOOM = max(0.25, min(4, ZOOM*0.95))
                 print(f"Scroll up! {ZOOM:0.04f}")
                 self.alpha_zoom:float = 255
 
-            elif event.button == 5:
-                ZOOM = max(0.25, min(4, ZOOM*1.02))
+            elif event.y < 0:
+                ZOOM = max(0.25, min(4, ZOOM*1.05))
                 print(f"Scroll up! {ZOOM:0.04f}")
                 self.alpha_zoom:float = 255
+            event.y = 0
 
         else:
             if self.press & (self.side == 1):
@@ -88,8 +90,9 @@ class Mouse:
         rect_text = text_surface.get_rect()
         SCREEN.blit(text_surface, rect_text)
 
-
     def find_event(self, event) -> None:
+        global ZOOM
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 print("Press (esc)!")
@@ -109,6 +112,19 @@ class Mouse:
             elif event.key == pygame.K_b:
                 print("Press (b)!")
                 self.mode = "(B)oth connection"
+            elif (event.key == pygame.K_KP_PLUS) | (event.key == pygame.K_PAGEUP):
+                ZOOM = max(0.25, min(4, ZOOM-0.25))
+                print(f"Press (+)! {ZOOM:0.04f}")
+                self.alpha_zoom:float = 255
+                self.mode = "(+ | PGUP) Zoon in"
+            elif (event.key == pygame.K_KP_MINUS) | (event.key == pygame.K_PAGEDOWN):
+                ZOOM = max(0.25, min(4, ZOOM+0.25))
+                print(f"Press (-)! {ZOOM:0.04f}")
+                self.alpha_zoom:float = 255
+                self.mode = "(- | PGDOWN) Zoon out"
+            elif event.key == pygame.K_u:
+                print("Press (u)!")
+                self.mode = "(U)ndo"
 
             else:
                 self.mode = None
@@ -119,7 +135,9 @@ class Mouse:
 
         if (self.mode == "(N)ode") & (self.click == True) & (self.side == 1):
             x_temp, y_temp = pygame.mouse.get_pos()
-            NODES.create_node((x_temp*ZOOM + SCREENX, y_temp*ZOOM + SCREENY))
+            pos_x, pos_y = x_temp*ZOOM + SCREENX, y_temp*ZOOM + SCREENY
+            #if abs(x_temp - )
+            NODES.create_node((pos_x, pos_y))
 
         elif self.mode == "(I)nfo":
             self.alpha_zoom:int = 255
@@ -160,9 +178,18 @@ class Nodes:
     def animation(self) -> None:
         global SCREENX, SCREENY, ZOOM
 
+        x, y = pygame.mouse.get_pos()
         for i, pos in enumerate(self.pos):
+            x_pos, y_pos = pos[0]*1/ZOOM - SCREENX, pos[1]*1/ZOOM - SCREENY
+            len_:int = round(20*1/ZOOM)
             pygame.draw.circle(NODESURF, (*self.colors[i], 255),
-                                          [pos[0]*1/ZOOM - SCREENX, pos[1]*1/ZOOM - SCREENY], round(20*1/ZOOM), round(3*1/ZOOM))
+                                          [x_pos, y_pos], len_, round(4*1/ZOOM*255/self.colors[i][2]))
+
+            if (x - x_pos)*(x - x_pos) + (y - y_pos)*(y - y_pos) < len_**2*1.2:
+                self.colors[i][2] = max(self.colors[i][2] - 10, 80)
+            else:
+                self.colors[i][2] = min(self.colors[i][2] + 10, 255)
+
 
     def create_node(self, pos:list[int, int]) -> None:
         self.pos.append(pos)
