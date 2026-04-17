@@ -86,7 +86,7 @@ class Mouse:
                                (self.x+30, self.y+ZOOM*10 - 20), 6, 6)
 
 
-        text_surface = TEXTRENDER.render(f"Mode: {self.mode if self.mode != None else '~'}", True, (255, 255, 255))
+        text_surface = TEXTRENDER.render(f"Mode: {self.mode if self.mode != None else '~'}\n{x_temp*ZOOM + SCREENX, y_temp*ZOOM + SCREENY}", True, (255, 255, 255))
         rect_text = text_surface.get_rect()
         SCREEN.blit(text_surface, rect_text)
 
@@ -125,6 +125,9 @@ class Mouse:
             elif event.key == pygame.K_u:
                 print("Press (u)!")
                 self.mode = "(U)ndo"
+            elif event.key == pygame.K_r:
+                print("Press (r)!")
+                self.mode = "(R)emove"
 
             else:
                 self.mode = None
@@ -134,10 +137,25 @@ class Mouse:
         global NODES, MAXSCREENX, MAXSCREENY, GRIDSURF, SCREENX, SCREENY, ZOOM
 
         if (self.mode == "(N)ode") & (self.click == True) & (self.side == 1):
-            x_temp, y_temp = pygame.mouse.get_pos()
-            pos_x, pos_y = x_temp*ZOOM + SCREENX, y_temp*ZOOM + SCREENY
-            #if abs(x_temp - )
-            NODES.create_node((pos_x, pos_y))
+            pos_x, pos_y = projection_mouse_pos()
+            can_put:bool = True
+            for index, (pos_x_temp, pos_y_temp) in enumerate(NODES.pos):
+                if (abs(pos_x_temp - pos_x) < 50) and (abs(pos_y_temp - pos_y) < 50):
+                    can_put:bool = False
+                    NODES.warnings[index] = 120
+                    print(f"Not possible!")
+                    break
+
+            if can_put:
+                NODES.create_node((pos_x, pos_y))
+
+        elif (self.mode == "(R)emove") & (self.click == True) & (self.side == 1):
+            pos_x, pos_y = projection_mouse_pos()
+            can_put:bool = True
+            for index, (pos_x_temp, pos_y_temp) in enumerate(NODES.pos):
+                if (abs(pos_x_temp - pos_x) < 30) and (abs(pos_y_temp - pos_y) < 30):
+                    NODES.remove(index)
+                    break
 
         elif self.mode == "(I)nfo":
             self.alpha_zoom:int = 255
@@ -149,10 +167,10 @@ class Grid:
 
         diff:int = round(100*1/ZOOM)
         for line_x in range(0, MAXSCREENX+diff+1, diff):
-            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (line_x-SCREENX%diff, 0), (line_x-SCREENX%diff, MAXSCREENY), 3)
+            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (line_x-SCREENX/ZOOM%diff, 0), (line_x-SCREENX/ZOOM%diff, MAXSCREENY), 3)
 
         for line_y in range(0, MAXSCREENY+diff+1, diff):
-            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (0, line_y-SCREENY%diff), (MAXSCREENX, line_y-SCREENY%diff), 3)
+            pygame.draw.line(GRIDSURF, (255, 255, 255, 30), (0, line_y-SCREENY/ZOOM%diff), (MAXSCREENX, line_y-SCREENY/ZOOM%diff), 3)
 
         x, y = pygame.mouse.get_pos()
         n:float = 0.05
@@ -173,14 +191,23 @@ class Nodes:
         self.colors:list[int, int, int] = []
         self.ids:list[int] = []
         self.names:list[str] = []
-        self.conections:list[str] = []
+        self.connections:list[str] = []
+        self.warnings:list[int] = []
+
+    def remove(self, i:int) -> None:
+        del self.pos[i]
+        del self.colors[i]
+        del self.ids[i]
+        del self.names[i]
+        del self.connections[i]
+        del self.warnings[i]
 
     def animation(self) -> None:
         global SCREENX, SCREENY, ZOOM
 
         x, y = pygame.mouse.get_pos()
         for i, pos in enumerate(self.pos):
-            x_pos, y_pos = pos[0]*1/ZOOM - SCREENX, pos[1]*1/ZOOM - SCREENY
+            x_pos, y_pos = (pos[0] - SCREENX)/ZOOM, (pos[1] - SCREENY)/ZOOM
             len_:int = round(20*1/ZOOM)
             pygame.draw.circle(NODESURF, (*self.colors[i], 255),
                                           [x_pos, y_pos], len_, round(4*1/ZOOM*255/self.colors[i][2]))
@@ -190,11 +217,17 @@ class Nodes:
             else:
                 self.colors[i][2] = min(self.colors[i][2] + 10, 255)
 
+            if self.warnings[i] > 0:
+                pygame.draw.rect(MOUSESURF, (255, 0, 0, self.warnings[i]), (x_pos-50, y_pos-50, 100, 100))
+                self.warnings[i] -= 5
 
     def create_node(self, pos:list[int, int]) -> None:
         self.pos.append(pos)
         self.colors.append([255, 255, 255])
         self.ids.append("".join([chr(int(random.uniform(65, 127))) for i in range(15)]))
+        self.names.append(None)
+        self.connections.append(None)
+        self.warnings.append(0)
         print(self.pos, self.ids)
 
 class Log:
@@ -213,9 +246,9 @@ def projection_mouse_pos() -> (float, float):
     """
     Screen mouse pos to real mouse pos
     """
-    global MAXSCREENX, MAXSCREENY, SCREENX, SCREENY
+    global MAXSCREENX, MAXSCREENY, SCREENX, SCREENY, ZOOM
     x, y = pygame.mouse.get_pos()
-    return MAXSCREENX + SCREENX, MAXSCREENY + SCREENY
+    return x*ZOOM + SCREENX, y*ZOOM + SCREENY
 
 
 def exp_mean(pos_past, pos_now, alpha = 0.2) -> float:
