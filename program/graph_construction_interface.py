@@ -28,6 +28,7 @@ class Mouse:
         self.radius:int = 7
         self.effect_press:float = 1
         self.alpha_zoom:int = 0
+        self.point:str = None
 
     def animation(self) -> None:
         global TEXTRENDER, ZOOM
@@ -160,6 +161,21 @@ class Mouse:
         elif self.mode == "(I)nfo":
             self.alpha_zoom:int = 255
 
+        elif ((self.mode == "(C)onnection") | (self.mode == "(B)oth connection")) & (self.click == True) & (self.side == 1):
+            pos_x, pos_y = projection_mouse_pos()
+            for index, (pos_x_temp, pos_y_temp) in enumerate(NODES.pos):
+                if (abs(pos_x_temp - pos_x) < 50) and (abs(pos_y_temp - pos_y) < 50):
+                    NODES.warnings[index] = 120
+                    if self.point == None:
+                        self.point:str = NODES.ids[index]
+                    elif (self.point != None) & (self.point != NODES.ids[index]):
+                        index_point:int = NODES.ids.index(self.point)
+                        if NODES.connections[index_point] == None:
+                            NODES.connections[index_point] = []
+                        NODES.connections[index_point].append(NODES.ids[index])
+                        self.point = None
+                    break
+
 
 class Grid:
     def animation(self) -> None:
@@ -220,6 +236,16 @@ class Nodes:
             if self.warnings[i] > 0:
                 pygame.draw.rect(MOUSESURF, (255, 0, 0, self.warnings[i]), (x_pos-50, y_pos-50, 100, 100))
                 self.warnings[i] -= 5
+
+            if self.connections[i] != None:
+                for index_con, con in enumerate(self.connections[i]):
+                    try:
+                        index_point:int = self.ids.index(con)
+                        pos_2 = self.pos[index_point]
+                        x_pos_2, y_pos_2 = (pos_2[0] - SCREENX)/ZOOM, (pos_2[1] - SCREENY)/ZOOM
+                        pygame.draw.line(NODESURF, (150, 150, 180, 160), (x_pos, y_pos), (x_pos_2, y_pos_2), 3)
+                    except ValueError:
+                        del self.connections[i][index_con]
 
     def create_node(self, pos:list[int, int]) -> None:
         self.pos.append(pos)
